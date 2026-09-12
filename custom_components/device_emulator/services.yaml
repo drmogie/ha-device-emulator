@@ -1,0 +1,30 @@
+set_sensor_value:
+  name: Set sensor value
+  description: Set the value of an emulated sensor entity.
+  target:
+    entity:
+      domain: sensor
+      integration: device_emulator
+  fields:
+    value:
+      name: Value
+      description: The new value to report (numbers are stored as numbers).
+      required: true
+      example: "21.5"
+      selector:
+        text:
+
+set_binary_sensor_state:
+  name: Set binary sensor state
+  description: Set the on/off state of an emulated binary sensor entity.
+  target:
+    entity:
+      domain: binary_sensor
+      integration: device_emulator
+  fields:
+    state:
+      name: State
+      description: True for on/detected, false for off/clear.
+      required: true
+      selector:
+        boolean:

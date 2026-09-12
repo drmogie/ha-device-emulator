@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add an emulated device",
+        "data": {
+          "name": "Name",
+          "device_type": "Device type"
+        }
+      },
+      "configure": {
+        "title": "Configure the emulated device",
+        "data": {
+          "device_class": "Device class (optional)",
+          "unit_of_measurement": "Unit of measurement (optional)",
+          "initial_value": "Initial value",
+          "initial_state": "Start on"
+        }
+      }
+    }
+  }
+}
