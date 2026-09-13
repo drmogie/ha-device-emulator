@@ -3,18 +3,80 @@
     "step": {
       "user": {
         "title": "Add an emulated device",
+        "description": "Pick the Home Assistant domain to emulate.",
         "data": {
-          "name": "Name",
-          "device_type": "Device type"
+          "device_type": "Domain"
         }
       },
-      "configure": {
-        "title": "Configure the emulated device",
+      "show_as": {
+        "title": "Show as",
+        "description": "This domain covers more than one real device class - pick which one to show it as.",
         "data": {
-          "device_class": "Device class (optional)",
-          "unit_of_measurement": "Unit of measurement (optional)",
-          "initial_value": "Initial value",
-          "initial_state": "Start on"
+          "show_as": "Show as"
+        }
+      },
+      "image_source": {
+        "title": "Image source",
+        "description": "Enter an image URL (http:// or https://), or a path relative to your www folder (served at /local/), e.g. \"myphoto.jpg\".",
+        "data": {
+          "image_source": "Image source"
+        }
+      },
+      "target": {
+        "title": "Add to a device?",
+        "description": "Create this as its own new device, or add it onto an existing Device Emulator device instead - the same as using that device's \"Configure\" option. No extra entry is created either way.",
+        "data": {
+          "target_entry_id": "Add to"
+        }
+      },
+      "name": {
+        "title": "Name it",
+        "description": "Suggested based on what you picked - change it if you'd like.",
+        "data": {
+          "name": "Name"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "An emulated device with this domain, show-as, and name already exists.",
+      "added_to_device": "Added to the selected device."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure this device",
+        "description": "Add a new entity to this device, or remove one that's already here.",
+        "data": {
+          "action": "What do you want to do?"
+        }
+      },
+      "add": {
+        "title": "Add to this device",
+        "description": "Pick another domain to add as an entity on this device - e.g. add a Battery sensor to make this device look battery-powered.",
+        "data": {
+          "device_type": "Domain"
+        }
+      },
+      "remove": {
+        "title": "Remove an entity",
+        "description": "Pick which entity to remove. Anything created alongside it (hidden helper switches, sensors, or buttons) is removed too.",
+        "data": {
+          "component_id": "Entity"
+        }
+      },
+      "show_as": {
+        "title": "Show as",
+        "description": "This domain covers more than one real device class - pick which one to show it as.",
+        "data": {
+          "show_as": "Show as"
+        }
+      },
+      "image_source": {
+        "title": "Image source",
+        "description": "Enter an image URL (http:// or https://), or a path relative to your www folder (served at /local/), e.g. \"myphoto.jpg\".",
+        "data": {
+          "image_source": "Image source"
         }
       }
     }
