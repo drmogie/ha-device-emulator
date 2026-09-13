@@ -36,7 +36,13 @@ from .const import (
     components_for,
     device_info_for,
 )
-from .helpers import STATE_OVERRIDE_OPTIONS, get_entity, set_entity, set_state_override
+from .helpers import (
+    STATE_OVERRIDE_OPTIONS,
+    get_entity,
+    set_entity,
+    set_state_override,
+    set_weather_override,
+)
 
 
 async def async_setup_entry(
@@ -104,12 +110,18 @@ class FakeWeatherConditionSelect(SelectEntity, RestoreEntity):
         if (last_state := await self.async_get_last_state()) is not None:
             if last_state.state in self._attr_options:
                 self._attr_current_option = last_state.state
-                self._apply()
+        # Always apply, even with no restored state (a fresh install, or
+        # nothing to restore) - this is the sole owner of the override,
+        # so it needs to positively (re)assert its value into hass.data
+        # every time it sets up, rather than only when it had something
+        # non-default to push.
+        self._apply()
 
     def _apply(self) -> None:
-        weather_entity = get_entity(self.hass, self._component.id, "weather_entity")
-        if weather_entity is not None:
-            weather_entity.set_condition_override(self._attr_current_option)
+        condition = (
+            None if self._attr_current_option == WEATHER_AUTO_OPTION else self._attr_current_option
+        )
+        set_weather_override(self.hass, self._component.id, condition)
 
     async def async_select_option(self, option: str) -> None:
         self._attr_current_option = option

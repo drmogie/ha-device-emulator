@@ -64,6 +64,35 @@ def set_state_override(hass: HomeAssistant, entry_id: str, option: str) -> None:
         entity.async_write_ha_state()
 
 
+def get_weather_override(hass: HomeAssistant, component_id: str) -> str | None:
+    """Return the forced condition for this weather component, or None for auto.
+
+    The "Weather condition" select is the sole source of truth for this -
+    it owns the value and is the one that restores it across restarts.
+    The weather entity itself just reads this live on every state/
+    forecast computation instead of keeping its own separately-restored
+    copy of the same thing. Two independent copies of one value, each
+    restored by a different entity with no guaranteed setup order, is
+    exactly how the override used to get lost or go stale; reading one
+    shared value removes that failure mode entirely.
+    """
+    return _entry_data(hass, component_id).get("weather_override")
+
+
+def set_weather_override(hass: HomeAssistant, component_id: str, condition: str | None) -> None:
+    """Set (None for auto) the forced condition for this weather component.
+
+    Refreshes the weather entity immediately if it's already set up - the
+    same immediate-refresh reason set_state_override refreshes
+    status_entities - otherwise the change wouldn't be visible until the
+    entity's next 15-minute tick.
+    """
+    _entry_data(hass, component_id)["weather_override"] = condition
+    weather_entity = _entry_data(hass, component_id).get("weather_entity")
+    if weather_entity is not None:
+        weather_entity.async_write_ha_state()
+
+
 def set_entity(hass: HomeAssistant, entry_id: str, key: str, entity) -> None:
     """Register any entity under an arbitrary key for this config entry.
 

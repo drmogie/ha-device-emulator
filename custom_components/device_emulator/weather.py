@@ -19,11 +19,10 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
-from .const import Component, DEVICE_TYPE_WEATHER, WEATHER_AUTO_OPTION, components_for, device_info_for
-from .helpers import set_entity
+from .const import Component, DEVICE_TYPE_WEATHER, components_for, device_info_for
+from .helpers import get_weather_override, set_entity
 from .mixins import FakeEntityMixin
 
 TICK = timedelta(minutes=15)
@@ -39,15 +38,20 @@ async def async_setup_entry(
     )
 
 
-class FakeWeather(FakeEntityMixin, WeatherEntity, RestoreEntity):
+class FakeWeather(FakeEntityMixin, WeatherEntity):
     """A simulated weather station that cycles through conditions.
 
-    Restores its own condition override on startup (via extra_state_
-    attributes) rather than depending on the companion select pushing it
-    over after restoring its own value - weather and select are
-    different platforms set up concurrently with no guaranteed order, so
-    a push-only approach would silently lose the override whenever
-    weather happened to finish setting up after the select did.
+    The "Weather condition" override (see select.py's
+    FakeWeatherConditionSelect) lives centrally in hass.data via
+    helpers.get_weather_override/set_weather_override, owned entirely by
+    that select entity - this entity only ever reads it live, on every
+    state/forecast computation, rather than keeping its own copy. That
+    used to be two independently-restored copies of the same value with
+    no guaranteed order between their restores, which is how the
+    override could get silently lost or go stale (e.g. falling back to
+    "sunny", the first entry in CONDITIONS_CYCLE) after a restart, or
+    fail to show up immediately when changed. Reading one shared value
+    removes that whole failure mode.
     """
 
     _attr_has_entity_name = True
@@ -72,22 +76,13 @@ class FakeWeather(FakeEntityMixin, WeatherEntity, RestoreEntity):
         self._attr_native_wind_speed = 8.0
         self._attr_wind_bearing = 220
         self._attr_native_visibility = 10.0
-        self._attr_condition = CONDITIONS_CYCLE[0]
         self._cycle_index = 0
-        self._override: str | None = None
         self._remove_timer = None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._register_for_status_updates()
         set_entity(self.hass, self._component.id, "weather_entity", self)
-
-        if (last_state := await self.async_get_last_state()) is not None:
-            override = last_state.attributes.get("condition_override")
-            if override:
-                self._override = override
-                self._attr_condition = override
-
         self._remove_timer = async_track_time_interval(self.hass, self._tick, TICK)
 
     async def async_will_remove_from_hass(self) -> None:
@@ -95,23 +90,13 @@ class FakeWeather(FakeEntityMixin, WeatherEntity, RestoreEntity):
             self._remove_timer()
 
     @property
-    def extra_state_attributes(self) -> dict[str, str]:
-        """Carry the override through restarts - see async_added_to_hass."""
-        return {"condition_override": self._override} if self._override else {}
-
-    @callback
-    def set_condition_override(self, option: str) -> None:
-        """Called by the companion select entity when the user picks a condition."""
-        self._override = None if option == WEATHER_AUTO_OPTION else option
-        if self._override:
-            self._attr_condition = self._override
-            self.async_write_ha_state()
+    def condition(self) -> str | None:
+        return get_weather_override(self.hass, self._component.id) or CONDITIONS_CYCLE[self._cycle_index]
 
     @callback
     def _tick(self, now) -> None:
-        if self._override is None:
+        if get_weather_override(self.hass, self._component.id) is None:
             self._cycle_index = (self._cycle_index + 1) % len(CONDITIONS_CYCLE)
-            self._attr_condition = CONDITIONS_CYCLE[self._cycle_index]
         self._attr_native_temperature = round(
             self._attr_native_temperature + random.uniform(-1.5, 1.5), 1
         )
@@ -123,12 +108,13 @@ class FakeWeather(FakeEntityMixin, WeatherEntity, RestoreEntity):
 
     async def async_forecast_daily(self) -> list[Forecast]:
         base = self._attr_native_temperature
+        override = get_weather_override(self.hass, self._component.id)
         return [
             Forecast(
                 datetime=(dt_util.utcnow() + timedelta(days=i)).isoformat(),
                 native_temperature=round(base + random.uniform(-5, 5), 1),
                 native_templow=round(base - 10 + random.uniform(-3, 3), 1),
-                condition=self._override
+                condition=override
                 or CONDITIONS_CYCLE[(self._cycle_index + i) % len(CONDITIONS_CYCLE)],
                 precipitation_probability=random.randint(0, 60),
             )
@@ -137,11 +123,12 @@ class FakeWeather(FakeEntityMixin, WeatherEntity, RestoreEntity):
 
     async def async_forecast_hourly(self) -> list[Forecast]:
         base = self._attr_native_temperature
+        override = get_weather_override(self.hass, self._component.id)
         return [
             Forecast(
                 datetime=(dt_util.utcnow() + timedelta(hours=i)).isoformat(),
                 native_temperature=round(base + random.uniform(-3, 3), 1),
-                condition=self._override
+                condition=override
                 or CONDITIONS_CYCLE[(self._cycle_index + i) % len(CONDITIONS_CYCLE)],
                 precipitation_probability=random.randint(0, 40),
             )

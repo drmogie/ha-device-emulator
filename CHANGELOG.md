@@ -2,6 +2,23 @@
 
 All notable changes to Device Emulator are documented here, newest first.
 
+## 5.2.3
+
+### Fixed
+- The weather condition override could still get silently lost (falling
+  back to auto-cycling, and "sunny" specifically since it's first in the
+  cycle) or fail to show up immediately when changed. The root cause:
+  the override was kept as two independently-restored copies of the
+  same value - one on the "Weather condition" select, one on the
+  weather entity itself (added in 5.2.2) - with no guaranteed order
+  between their restores, so they could disagree or one could
+  overwrite the other with a stale value. The override now lives in
+  exactly one place (owned by the select), which the weather entity
+  reads live on every state and forecast computation instead of
+  keeping its own copy - so changing the select is reflected
+  immediately and there's nothing left to fall out of sync after a
+  restart.
+
 ## 5.2.2
 
 ### Fixed
