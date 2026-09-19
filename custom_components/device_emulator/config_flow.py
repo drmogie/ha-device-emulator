@@ -37,6 +37,9 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
 )
 
 from .const import (
@@ -47,13 +50,16 @@ from .const import (
     CONF_IMAGE_SOURCE,
     CONF_OPTIONS,
     CONF_SHOW_AS,
+    CONF_YAML,
     DEFAULT_SELECT_OPTIONS,
     DEVICE_TYPE_LABELS,
     DOMAIN,
     IMAGE_SOURCE_TYPES,
     OPTIONS_ENTRY_TYPES,
     SHOW_AS_OPTIONS,
+    YamlSpecError,
     components_for,
+    parse_components_yaml,
     suggested_name,
 )
 
@@ -62,6 +68,34 @@ _TARGET_ENTRY_ID = "target_entry_id"  # transient flow key, never stored on the 
 
 ACTION_ADD = "add"
 ACTION_REMOVE = "remove"
+ACTION_IMPORT_YAML = "import_yaml"
+
+# Shown as the "Import from YAML" form's default content - a small,
+# already-valid example rather than an empty box, so Submit-without-editing
+# demonstrates the feature instead of just erroring.
+_YAML_IMPORT_EXAMPLE = """name: My Composed Device
+components:
+  - device_type: binary_sensor
+    show_as: motion
+  - device_type: sensor
+    show_as: temperature
+"""
+_YAML_IMPORT_EXAMPLE_NO_NAME = """components:
+  - device_type: binary_sensor
+    show_as: motion
+  - device_type: sensor
+    show_as: temperature
+"""
+
+
+def _yaml_textarea_schema(field_default: str) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(CONF_YAML, default=field_default): TextSelector(
+                TextSelectorConfig(multiline=True, type=TextSelectorType.TEXT)
+            )
+        }
+    )
 
 
 class _ComponentStepsMixin:
@@ -140,6 +174,14 @@ class DeviceEmulatorConfigFlow(
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        """Add one domain through the wizard, or import a whole composed device."""
+        return self.async_show_menu(
+            step_id="user", menu_options=["single", "yaml_import"]
+        )
+
+    async def async_step_single(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Ask which Home Assistant domain to emulate."""
         if user_input is not None:
             self._data = dict(user_input)
@@ -158,7 +200,51 @@ class DeviceEmulatorConfigFlow(
                 ),
             }
         )
-        return self.async_show_form(step_id="user", data_schema=schema)
+        return self.async_show_form(step_id="single", data_schema=schema)
+
+    async def async_step_yaml_import(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Create a whole new composed device from a pasted YAML block.
+
+        Unlike the single-domain wizard, this always creates a brand-new
+        device (see the "target existing device" bullet in the module
+        docstring) - the YAML's own top-level `name:` becomes the device's
+        name and its `components:` list becomes the entry's entire
+        component list in one step. To add YAML-described entities onto an
+        EXISTING device instead, use that device's own "Configure" option,
+        which has the equivalent step without the name requirement.
+        """
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                components, name = parse_components_yaml(user_input[CONF_YAML])
+                if not name:
+                    raise YamlSpecError(
+                        "add a top-level 'name:' - it becomes the new device's name"
+                    )
+            except YamlSpecError as err:
+                errors["base"] = "invalid_yaml"
+                placeholders["error"] = str(err)
+            else:
+                await self.async_set_unique_id(
+                    "yaml_import_" + name.strip().lower().replace(" ", "_")
+                )
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=name, data={CONF_COMPONENTS: components}
+                )
+
+        return self.async_show_form(
+            step_id="yaml_import",
+            data_schema=_yaml_textarea_schema(
+                user_input[CONF_YAML] if user_input else _YAML_IMPORT_EXAMPLE
+            ),
+            errors=errors,
+            description_placeholders=placeholders,
+        )
 
     async def async_step_target(
         self, user_input: dict[str, Any] | None = None
@@ -273,6 +359,8 @@ class DeviceEmulatorOptionsFlow(_ComponentStepsMixin, config_entries.OptionsFlow
         if user_input is not None:
             if user_input["action"] == ACTION_REMOVE:
                 return await self.async_step_remove()
+            if user_input["action"] == ACTION_IMPORT_YAML:
+                return await self.async_step_import_yaml()
             return await self.async_step_add()
 
         schema = vol.Schema(
@@ -281,6 +369,10 @@ class DeviceEmulatorOptionsFlow(_ComponentStepsMixin, config_entries.OptionsFlow
                     SelectSelectorConfig(
                         options=[
                             {"value": ACTION_ADD, "label": "Add an entity"},
+                            {
+                                "value": ACTION_IMPORT_YAML,
+                                "label": "Import entities from YAML",
+                            },
                             {"value": ACTION_REMOVE, "label": "Remove an entity"},
                         ],
                         mode=SelectSelectorMode.DROPDOWN,
@@ -289,6 +381,45 @@ class DeviceEmulatorOptionsFlow(_ComponentStepsMixin, config_entries.OptionsFlow
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def async_step_import_yaml(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Add every component described in a pasted YAML block onto THIS device.
+
+        Same `components:` list format as the main flow's "Import from
+        YAML" option (see its docstring) - a top-level `name:` is accepted
+        but ignored here, since this device already has one.
+        """
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                new_components, _name = parse_components_yaml(user_input[CONF_YAML])
+            except YamlSpecError as err:
+                errors["base"] = "invalid_yaml"
+                placeholders["error"] = str(err)
+            else:
+                entry = self.config_entry
+                updated_components = [
+                    *entry.data.get(CONF_COMPONENTS, []),
+                    *new_components,
+                ]
+                self.hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, CONF_COMPONENTS: updated_components}
+                )
+                await self.hass.config_entries.async_reload(entry.entry_id)
+                return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="import_yaml",
+            data_schema=_yaml_textarea_schema(
+                user_input[CONF_YAML] if user_input else _YAML_IMPORT_EXAMPLE_NO_NAME
+            ),
+            errors=errors,
+            description_placeholders=placeholders,
+        )
 
     async def async_step_add(
         self, user_input: dict[str, Any] | None = None

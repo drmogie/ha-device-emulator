@@ -69,6 +69,89 @@ several similar entities stays distinguishable, and they all share the
 one "Simulated status" control below - adding more entities never adds
 more status controls.
 
+## Importing a composed device from YAML
+
+Building a device with a lot of entities one at a time gets slow, so
+there's a second way in: paste a `name:` plus a `components:` list and
+every entity in it is created together, in one step.
+
+- **Add integration → Device Emulator** now asks "Pick one domain" (the
+  wizard above, unchanged) or **"Import a composed device from YAML"** -
+  the second option creates a whole new device from what you paste.
+- Any existing device's **Configure** option has a matching **"Import
+  entities from YAML"** choice next to Add/Remove, for adding several
+  entities onto that *same* device at once (no `name:` needed there).
+
+Each item in `components:` takes the same fields the wizard itself would
+ask for - `device_type` (any domain from the table below), and
+`show_as` / `image_source` / `options` for the domains that need one
+(left out, they default the same way the wizard's own defaults do - the
+first "show as" choice, `Option 1, Option 2, Option 3` for Select).
+Invalid YAML, an unknown `device_type`, a `show_as` that domain doesn't
+have, or a missing required field is rejected right on the form with a
+specific reason - nothing partially imports.
+
+```yaml
+name: My Composed Device
+components:
+  - device_type: binary_sensor
+    show_as: motion
+  - device_type: sensor
+    show_as: temperature
+  - device_type: select
+    options: "Low, Medium, High"
+```
+
+A larger, real-world example - a fake stand-in for a multi-sensor
+presence device (PIR, mmWave, occupancy, temperature/humidity/
+illuminance, status LEDs, a firmware update entity, and its config
+numbers/selects) for testing dashboards without needing that hardware
+on hand:
+
+```yaml
+name: Basement Bathroom EPO (Fake)
+components:
+  - device_type: binary_sensor
+    show_as: motion       # PIR
+  - device_type: binary_sensor
+    show_as: occupancy    # Occupancy
+  - device_type: binary_sensor
+    show_as: presence     # mmWave
+  - device_type: light    # ESP32 status LED
+  - device_type: light    # mmWave LED
+  - device_type: sensor
+    show_as: temperature
+  - device_type: sensor
+    show_as: illuminance
+  - device_type: sensor
+    show_as: humidity
+  - device_type: switch   # mmWave sensor enable
+  - device_type: button   # Safe mode
+  - device_type: button   # Restart
+  - device_type: update   # Firmware update
+  - device_type: select
+    options: "Disabled, Enabled"   # Bluetooth Proxy
+  - device_type: select
+    options: "Disabled, Enabled"   # CO2 Sensor
+  - device_type: number   # Occupancy off latency
+  - device_type: number   # PIR off latency
+  - device_type: number   # PIR on latency
+  - device_type: number   # Temperature offset
+  - device_type: number   # Humidity offset
+  - device_type: number   # Illuminance offset
+  - device_type: number   # mmWave distance
+  - device_type: number   # mmWave off latency
+  - device_type: number   # mmWave on latency
+  - device_type: number   # mmWave sensitivity
+```
+
+Two things worth knowing: every `number` here is the same generic
+0-100 settable value (Device Emulator doesn't model each real device's
+actual min/max/unit), and two identically-typed components with no
+`show_as` to tell them apart (like the two `light` entries above) get
+the same generic label - fine for exercising a dashboard/automation,
+but they won't carry a real device's exact ranges or per-entity names.
+
 ## Every device gets a "Simulated status" control
 
 Every device, regardless of domain, gets a hidden **Simulated status**

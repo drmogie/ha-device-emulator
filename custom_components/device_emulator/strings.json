@@ -3,6 +3,13 @@
     "step": {
       "user": {
         "title": "Add an emulated device",
+        "menu_options": {
+          "single": "Pick one domain",
+          "yaml_import": "Import a composed device from YAML"
+        }
+      },
+      "single": {
+        "title": "Add an emulated device",
         "description": "Pick the Home Assistant domain to emulate.",
         "data": {
           "device_type": "Domain"
@@ -42,7 +49,17 @@
         "data": {
           "name": "Name"
         }
+      },
+      "yaml_import": {
+        "title": "Import from YAML",
+        "description": "Paste a top-level `name:` plus a `components:` list - each item needs a `device_type` (a real HA domain this integration supports) and, for domains that need one, `show_as` / `image_source` / `options`, exactly like the matching wizard step would ask for. Creates a whole new composed device in one step. See the README for the full format and a worked example.",
+        "data": {
+          "yaml": "YAML"
+        }
       }
+    },
+    "error": {
+      "invalid_yaml": "Couldn't import: {error}"
     },
     "abort": {
       "already_configured": "An emulated device with this domain, show-as, and name already exists.",
@@ -53,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configure this device",
-        "description": "Add a new entity to this device, or remove one that's already here.",
+        "description": "Add a new entity to this device, import several at once from YAML, or remove one that's already here.",
         "data": {
           "action": "What do you want to do?"
         }
@@ -92,7 +109,17 @@
         "data": {
           "options": "Options"
         }
+      },
+      "import_yaml": {
+        "title": "Import entities from YAML",
+        "description": "Paste a `components:` list (same format as the main flow's YAML import - a top-level `name:` is accepted but ignored, since this device already has one) to add every entity in it onto THIS device in one step.",
+        "data": {
+          "yaml": "YAML"
+        }
       }
+    },
+    "error": {
+      "invalid_yaml": "Couldn't import: {error}"
     }
   }
 }

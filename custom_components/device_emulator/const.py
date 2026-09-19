@@ -1,7 +1,11 @@
 """Constants for the Device Emulator integration."""
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
+from typing import Any
+
+import yaml
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import DeviceInfo
@@ -14,6 +18,11 @@ CONF_DEVICE_TYPE = "device_type"
 CONF_SHOW_AS = "show_as"
 CONF_IMAGE_SOURCE = "image_source"
 CONF_OPTIONS = "options"
+
+# Transient config-flow field for the "Import from YAML" form - never stored
+# on the entry itself, just parsed into component dicts by
+# parse_components_yaml() below.
+CONF_YAML = "yaml"
 
 # Entry-level config key: entry.data[CONF_COMPONENTS] is a list of component
 # dicts. The first is created by the initial "Add integration" flow; more
@@ -358,6 +367,90 @@ def components_for(entry: ConfigEntry) -> list[Component]:
         )
         for c in entry.data.get(CONF_COMPONENTS, [])
     ]
+
+
+class YamlSpecError(Exception):
+    """Raised when a YAML device-import spec is invalid or malformed."""
+
+
+def build_component_from_spec(spec: Any) -> dict[str, Any]:
+    """Validate one YAML component mapping and turn it into a stored component dict.
+
+    Mirrors exactly what the config-flow wizard's per-step choices produce
+    (see _ComponentStepsMixin / _build_component in config_flow.py) so a
+    YAML-imported component behaves identically to one built by hand -
+    same required show_as/image_source rules, same options default.
+    """
+    if not isinstance(spec, dict):
+        raise YamlSpecError(f"each component must be a mapping, got: {spec!r}")
+
+    device_type = spec.get(CONF_DEVICE_TYPE)
+    if device_type not in DEVICE_TYPE_LABELS:
+        valid = ", ".join(sorted(DEVICE_TYPE_LABELS))
+        raise YamlSpecError(
+            f"unknown device_type {device_type!r} - must be one of: {valid}"
+        )
+
+    component: dict[str, Any] = {
+        CONF_COMPONENT_ID: uuid.uuid4().hex[:12],
+        CONF_DEVICE_TYPE: device_type,
+    }
+
+    if device_type in SHOW_AS_OPTIONS:
+        options = SHOW_AS_OPTIONS[device_type]
+        valid_values = [opt["value"] for opt in options]
+        show_as = spec.get(CONF_SHOW_AS, valid_values[0])
+        if show_as not in valid_values:
+            raise YamlSpecError(
+                f"{device_type}: show_as {show_as!r} must be one of: "
+                + ", ".join(valid_values)
+            )
+        component[CONF_SHOW_AS] = show_as
+
+    if device_type in IMAGE_SOURCE_TYPES:
+        image_source = spec.get(CONF_IMAGE_SOURCE)
+        if not image_source:
+            raise YamlSpecError(f"{device_type}: image_source is required")
+        component[CONF_IMAGE_SOURCE] = image_source
+
+    if device_type in OPTIONS_ENTRY_TYPES:
+        component[CONF_OPTIONS] = spec.get(CONF_OPTIONS) or DEFAULT_SELECT_OPTIONS
+
+    return component
+
+
+def parse_components_yaml(raw: str) -> tuple[list[dict[str, Any]], str | None]:
+    """Parse a pasted YAML block into (component dicts, optional device name).
+
+    Expected shape::
+
+        name: My Composed Device      # only used when creating a brand-new
+        components:                   # device - ignored when importing onto
+          - device_type: binary_sensor  # an existing one
+            show_as: motion
+          - device_type: sensor
+            show_as: temperature
+
+    Raises YamlSpecError with a human-readable reason on anything wrong -
+    bad YAML syntax, the wrong top-level shape, an empty/missing
+    components list, or any single component failing
+    build_component_from_spec().
+    """
+    try:
+        data = yaml.safe_load(raw)
+    except yaml.YAMLError as err:
+        raise YamlSpecError(f"invalid YAML: {err}") from err
+
+    if not isinstance(data, dict):
+        raise YamlSpecError("top-level YAML must be a mapping (name/components)")
+
+    raw_components = data.get(CONF_COMPONENTS)
+    if not isinstance(raw_components, list) or not raw_components:
+        raise YamlSpecError("'components' must be a non-empty list")
+
+    components = [build_component_from_spec(spec) for spec in raw_components]
+    name = data.get("name")
+    return components, (str(name).strip() if name else None)
 
 
 def platforms_for_entry(entry: ConfigEntry) -> list[str]:

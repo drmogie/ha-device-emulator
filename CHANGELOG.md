@@ -2,6 +2,34 @@
 
 All notable changes to Device Emulator are documented here, newest first.
 
+## 5.4.0
+
+### Added
+- **Import a whole composed device from YAML**, in both places you'd
+  normally build one entity at a time:
+  - **Add integration → Device Emulator** now opens with a choice
+    between "Pick one domain" (the existing wizard, unchanged) and
+    "Import a composed device from YAML" - paste a `name:` plus a
+    `components:` list and every entity in it is created together, as
+    one new device, in a single step.
+  - Any existing device's **Configure** option gets a matching "Import
+    entities from YAML" choice alongside Add/Remove, for adding several
+    entities onto that SAME device at once (no `name:` needed there -
+    the device already has one).
+  - Each list item takes the same fields the wizard would ask for -
+    `device_type` (a domain this integration supports), and
+    `show_as` / `image_source` / `options` for the domains that need
+    one (defaults apply the same way the wizard's own defaults do if
+    left out). Bad YAML, an unknown `device_type`, an invalid
+    `show_as`, or a missing required field is rejected with a specific
+    reason shown right on the form - nothing partially imports.
+  - This doesn't change what a composed device IS (still one config
+    entry with a list of components) or how existing devices behave -
+    it's a second way to populate that same list, for when you're
+    recreating something with a lot of entities (a real multi-sensor
+    device you want a fake stand-in for, say) rather than always
+    clicking through one entity at a time.
+
 ## 5.3.0
 
 ### Added
