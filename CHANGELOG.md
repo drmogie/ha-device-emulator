@@ -2,6 +2,17 @@
 
 All notable changes to Device Emulator are documented here, newest first.
 
+## 5.5.3
+
+### Added
+- The standalone Sensor domain can now be shown as **Generic** - a plain
+  numeric sensor with no fixed device class, for readings that don't fit
+  any of the other 12 (a radar target's angle/distance/speed, a raw
+  count, ...). Like Number, it takes an optional YAML-only `unit`,
+  `min`, `max`, `step`, and `initial` (see README) instead of a fixed
+  device-class-driven unit and range. Selectable from the wizard too,
+  with a wide placeholder range until refined via YAML.
+
 ## 5.5.2
 
 ### Fixed

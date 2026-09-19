@@ -199,6 +199,13 @@ class FakeGenericSensor(FakeEntityMixin, SensorEntity, RestoreEntity):
         show_as = component.show_as or "temperature"
         self._is_battery = show_as == "battery"
         label, unit, default, _min, _max, _step = SENSOR_SHOW_AS_SPECS[show_as]
+        if show_as == "generic":
+            # No fixed device_class to draw a unit/starting value from -
+            # take whatever the YAML import gave (see _apply_number_fields),
+            # falling back to the placeholder spec above for anything it
+            # didn't set.
+            unit = component.unit if component.unit is not None else unit
+            default = component.initial if component.initial is not None else default
 
         self._attr_name = component.name or label
         self._attr_unique_id = f"{component.id}_sensor"

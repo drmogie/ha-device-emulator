@@ -230,6 +230,14 @@ SENSOR_SHOW_AS_SPECS = {
     "energy": ("Energy", "kWh", 10.0, 0.0, 100000.0, 0.1),
     "battery": ("Battery", "%", 100.0, 0.0, 100.0, 1.0),
     "signal_strength": ("Signal Strength", "dB", -60.0, -120.0, 0.0, 1.0),
+    # No real device_class - a plain numeric sensor for readings that don't
+    # match any of the specific classes above (a radar target's angle or
+    # distance, a raw count, ...). Selectable from the wizard like any
+    # other "show as" with these placeholder bounds and no unit; a YAML
+    # import can override unit/min/max/step/initial - see
+    # _apply_number_fields below, reused here exactly as the standalone
+    # Number device_type uses it.
+    "generic": ("Generic", None, 0.0, -1000000.0, 1000000.0, 1.0),
 }
 SENSOR_SHOW_AS = [
     {"value": key, "label": label} for key, (label, *_rest) in SENSOR_SHOW_AS_SPECS.items()
@@ -472,6 +480,10 @@ def build_component_from_spec(spec: Any) -> dict[str, Any]:
 
     if device_type == DEVICE_TYPE_NUMBER:
         _apply_number_fields(spec, component)
+    elif device_type == DEVICE_TYPE_SENSOR and component.get(CONF_SHOW_AS) == "generic":
+        # A generic sensor's value/range/unit are exactly as configurable
+        # via YAML as the standalone Number's - same fields, same rules.
+        _apply_number_fields(spec, component, prefix="sensor")
     elif device_type == DEVICE_TYPE_TEXT:
         _apply_text_fields(spec, component)
     elif device_type == DEVICE_TYPE_SELECT:
@@ -482,54 +494,61 @@ def build_component_from_spec(spec: Any) -> dict[str, Any]:
     return component
 
 
-def _apply_number_fields(spec: dict[str, Any], component: dict[str, Any]) -> None:
+def _apply_number_fields(
+    spec: dict[str, Any], component: dict[str, Any], prefix: str = "number"
+) -> None:
     """Validate and apply Number's helper-config-style fields onto `component`.
 
     Mirrors what a real `input_number` helper lets you configure: a unit,
     a min/max range, a step, a display mode (box/slider/auto), and a
     starting value - instead of this integration's old fixed generic
     0-100/step-1 range with no unit.
+
+    Shared verbatim by the standalone Number device_type and by a Sensor
+    component shown as "generic" (see build_component_from_spec) - `prefix`
+    only changes the error text so it names whichever domain is actually
+    being validated.
     """
     unit = spec.get(CONF_UNIT)
     if unit is not None:
         if not isinstance(unit, str) or not unit.strip():
-            raise YamlSpecError("number: unit must be a non-empty string if given")
+            raise YamlSpecError(f"{prefix}: unit must be a non-empty string if given")
         component[CONF_UNIT] = unit.strip()
 
     min_v = spec.get(CONF_MIN)
     max_v = spec.get(CONF_MAX)
     if (min_v is None) != (max_v is None):
-        raise YamlSpecError("number: min and max must both be given together, or neither")
+        raise YamlSpecError(f"{prefix}: min and max must both be given together, or neither")
     if min_v is not None:
         for key, val in ((CONF_MIN, min_v), (CONF_MAX, max_v)):
             if isinstance(val, bool) or not isinstance(val, (int, float)):
-                raise YamlSpecError(f"number: {key} must be a number")
+                raise YamlSpecError(f"{prefix}: {key} must be a number")
         if min_v >= max_v:
-            raise YamlSpecError("number: min must be less than max")
+            raise YamlSpecError(f"{prefix}: min must be less than max")
         component[CONF_MIN] = float(min_v)
         component[CONF_MAX] = float(max_v)
 
     step_v = spec.get(CONF_STEP)
     if step_v is not None:
         if isinstance(step_v, bool) or not isinstance(step_v, (int, float)) or step_v <= 0:
-            raise YamlSpecError("number: step must be a positive number")
+            raise YamlSpecError(f"{prefix}: step must be a positive number")
         component[CONF_STEP] = float(step_v)
 
     mode_v = spec.get(CONF_MODE)
     if mode_v is not None:
         if mode_v not in ("box", "slider", "auto"):
-            raise YamlSpecError('number: mode must be "box", "slider", or "auto"')
+            raise YamlSpecError(f'{prefix}: mode must be "box", "slider", or "auto"')
         component[CONF_MODE] = mode_v
 
     initial_v = spec.get(CONF_INITIAL)
     if initial_v is not None:
         if isinstance(initial_v, bool) or not isinstance(initial_v, (int, float)):
-            raise YamlSpecError("number: initial must be a number")
+            raise YamlSpecError(f"{prefix}: initial must be a number")
         lo = component.get(CONF_MIN, 0.0)
         hi = component.get(CONF_MAX, 100.0)
         if not lo <= initial_v <= hi:
             raise YamlSpecError(
-                f"number: initial ({initial_v}) must be between min ({lo}) and max ({hi})"
+                f"{prefix}: initial ({initial_v}) must be between min ({lo}) and max ({hi})"
             )
         component[CONF_INITIAL] = float(initial_v)
 

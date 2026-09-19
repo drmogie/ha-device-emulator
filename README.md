@@ -112,6 +112,7 @@ values instead of one generic 0-100 slider for every number:
 | `text` | `min`, `max`, `pattern`, `mode`, `initial` | `min`/`max` are character-length bounds. `mode` is `text` or `password`. `pattern` is a validation regex. |
 | `select` | `initial` | Must be one of the comma-separated `options`. |
 | `date` / `time` / `datetime` | `initial` | An ISO date/time/date-time string. |
+| `sensor` shown as **`generic`** | `unit`, `min`, `max`, `step`, `initial` | Same fields and rules as `number` above. For a reading that isn't one of the sensor's other 12 device classes - a radar target's angle/distance/speed, a raw count - and so has no fixed unit or range of its own. |
 
 Left out, every one of these falls back exactly the way it always has
 (no unit, 0-100 step-1 number, today/now for date/time/datetime, first
@@ -289,7 +290,7 @@ itself affected by the override, so you can always click back to Normal.
 | `cover` | 10 device classes | `cover` | Each with real travel time (2-18s) and animated open/close; blinds/shutters get tilt. |
 | `lock` | - | `lock` | Lock/unlock. |
 | `binary_sensor` | 18 device classes | `binary_sensor` + hidden `switch` | Flip the hidden "Simulate ..." switch to trip it. Momentary classes (motion, occupancy, presence, sound, vibration) auto-clear after ~30s. |
-| **`sensor`** | 12 device classes | `sensor` + hidden `number` (+`binary_sensor`, `switch`, `button` if Battery) | A generic settable sensor - temperature, humidity, illuminance, pressure, CO2, PM2.5, voltage, current, power, energy, battery, signal strength. Set it with the hidden "Value" number and it holds until changed - **except Battery**, which also drains/charges on its own: a hidden "Charging" switch (paired with a real "Charging" binary_sensor) starts it climbing toward 100% and auto-stops there, and a "Replace battery" button resets it to 100% instantly. The Value slider tracks the live number the whole time. |
+| **`sensor`** | 13 device classes | `sensor` + hidden `number` (+`binary_sensor`, `switch`, `button` if Battery) | A generic settable sensor - temperature, humidity, illuminance, pressure, CO2, PM2.5, voltage, current, power, energy, battery, signal strength, or plain **generic** (no device class - a YAML-only `unit`/`min`/`max`/`step`/`initial`, see the table above). Set it with the hidden "Value" number and it holds until changed - **except Battery**, which also drains/charges on its own: a hidden "Charging" switch (paired with a real "Charging" binary_sensor) starts it climbing toward 100% and auto-stops there, and a "Replace battery" button resets it to 100% instantly. The Value slider tracks the live number the whole time. |
 | `vacuum` | - | `vacuum`, `sensor`, `number` | Start/pause/stop/return/locate, 4 fan speeds. Battery drains while cleaning, auto-returns when low, recharges docked - the hidden "Battery level" number tracks that live and can also set it directly. |
 | `lawn_mower` | - | `lawn_mower`, `sensor`, `number` | Same shape as the vacuum: mow/pause/dock, battery drain/recharge/manual override, live-tracked slider. |
 | `water_heater` | - | `water_heater`, `number` | Eco/electric/gas/heat-pump/high-demand modes, away mode, tank temp drifts toward target or set directly. |

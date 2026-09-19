@@ -151,6 +151,14 @@ class FakeSensorValueNumber(NumberEntity):
         show_as = component.show_as or "temperature"
         self._is_battery = show_as == "battery"
         label, unit, default, minimum, maximum, step = SENSOR_SHOW_AS_SPECS[show_as]
+        if show_as == "generic":
+            # Same YAML-supplied override as the sibling sensor (sensor.py)
+            # so this slider's range/unit actually match what it controls.
+            unit = component.unit if component.unit is not None else unit
+            minimum = component.min_value if component.min_value is not None else minimum
+            maximum = component.max_value if component.max_value is not None else maximum
+            step = component.step if component.step is not None else step
+            default = component.initial if component.initial is not None else default
 
         self._attr_name = f"{component.name or label} Value"
         self._attr_unique_id = f"{component.id}_value_control"
@@ -159,6 +167,8 @@ class FakeSensorValueNumber(NumberEntity):
         self._attr_native_min_value = minimum
         self._attr_native_max_value = maximum
         self._attr_native_step = step
+        if component.mode is not None:
+            self._attr_mode = NumberMode(component.mode)
         self._attr_native_value = default
 
     async def async_added_to_hass(self) -> None:
