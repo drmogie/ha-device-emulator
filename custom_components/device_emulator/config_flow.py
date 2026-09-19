@@ -33,7 +33,10 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.file_upload import process_uploaded_file
 from homeassistant.helpers.selector import (
+    FileSelector,
+    FileSelectorConfig,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -65,6 +68,7 @@ from .const import (
 
 NEW_DEVICE_OPTION = "Create a new device"
 _TARGET_ENTRY_ID = "target_entry_id"  # transient flow key, never stored on the entry
+_CONF_YAML_FILE = "yaml_file"  # transient flow key, never stored on the entry
 
 ACTION_ADD = "add"
 ACTION_REMOVE = "remove"
@@ -98,14 +102,45 @@ _YAML_IMPORT_EXAMPLE_NO_NAME = """components:
 """
 
 
-def _yaml_textarea_schema(field_default: str) -> vol.Schema:
+def _yaml_import_schema(field_default: str) -> vol.Schema:
+    """A file picker (drag-and-drop or "choose file", .yaml/.yml) plus the
+    original paste-a-block textarea - either one, filled in, is enough.
+    """
     return vol.Schema(
         {
-            vol.Required(CONF_YAML, default=field_default): TextSelector(
+            vol.Optional(_CONF_YAML_FILE): FileSelector(
+                FileSelectorConfig(accept=".yaml,.yml,text/yaml,text/x-yaml")
+            ),
+            vol.Optional(CONF_YAML, default=field_default): TextSelector(
                 TextSelectorConfig(multiline=True, type=TextSelectorType.TEXT)
-            )
+            ),
         }
     )
+
+
+def _read_uploaded_yaml_file(hass, file_id: str) -> str:
+    """Read an uploaded file's text content.
+
+    `process_uploaded_file` hands back a path to a temp copy that's deleted
+    the moment this `with` block exits, so the content has to be read here,
+    not returned as a path for later. Blocking file I/O - always call this
+    via `hass.async_add_executor_job`, never awaited directly.
+    """
+    with process_uploaded_file(hass, file_id) as file_path:
+        return file_path.read_text(encoding="utf-8")
+
+
+async def _resolve_yaml_text(hass, user_input: dict[str, Any]) -> str:
+    """Prefer an uploaded file's content; fall back to the pasted text box."""
+    file_id = user_input.get(_CONF_YAML_FILE)
+    if file_id:
+        try:
+            return await hass.async_add_executor_job(
+                _read_uploaded_yaml_file, hass, file_id
+            )
+        except (ValueError, OSError) as err:
+            raise YamlSpecError(f"couldn't read the uploaded file - {err}") from err
+    return user_input.get(CONF_YAML, "")
 
 
 class _ComponentStepsMixin:
@@ -230,7 +265,12 @@ class DeviceEmulatorConfigFlow(
 
         if user_input is not None:
             try:
-                components, name = parse_components_yaml(user_input[CONF_YAML])
+                yaml_text = await _resolve_yaml_text(self.hass, user_input)
+                if not yaml_text.strip():
+                    raise YamlSpecError(
+                        "paste a YAML block, or choose a file, describing the device"
+                    )
+                components, name = parse_components_yaml(yaml_text)
                 if not name:
                     raise YamlSpecError(
                         "add a top-level 'name:' - it becomes the new device's name"
@@ -249,8 +289,9 @@ class DeviceEmulatorConfigFlow(
 
         return self.async_show_form(
             step_id="yaml_import",
-            data_schema=_yaml_textarea_schema(
-                user_input[CONF_YAML] if user_input else _YAML_IMPORT_EXAMPLE
+            data_schema=_yaml_import_schema(
+                (user_input.get(CONF_YAML) if user_input else None)
+                or _YAML_IMPORT_EXAMPLE
             ),
             errors=errors,
             description_placeholders=placeholders,
@@ -406,7 +447,12 @@ class DeviceEmulatorOptionsFlow(_ComponentStepsMixin, config_entries.OptionsFlow
 
         if user_input is not None:
             try:
-                new_components, _name = parse_components_yaml(user_input[CONF_YAML])
+                yaml_text = await _resolve_yaml_text(self.hass, user_input)
+                if not yaml_text.strip():
+                    raise YamlSpecError(
+                        "paste a YAML block, or choose a file, describing the entities"
+                    )
+                new_components, _name = parse_components_yaml(yaml_text)
             except YamlSpecError as err:
                 errors["base"] = "invalid_yaml"
                 placeholders["error"] = str(err)
@@ -424,8 +470,9 @@ class DeviceEmulatorOptionsFlow(_ComponentStepsMixin, config_entries.OptionsFlow
 
         return self.async_show_form(
             step_id="import_yaml",
-            data_schema=_yaml_textarea_schema(
-                user_input[CONF_YAML] if user_input else _YAML_IMPORT_EXAMPLE_NO_NAME
+            data_schema=_yaml_import_schema(
+                (user_input.get(CONF_YAML) if user_input else None)
+                or _YAML_IMPORT_EXAMPLE_NO_NAME
             ),
             errors=errors,
             description_placeholders=placeholders,

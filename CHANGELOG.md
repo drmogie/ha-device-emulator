@@ -2,6 +2,17 @@
 
 All notable changes to Device Emulator are documented here, newest first.
 
+## 5.5.1
+
+### Added
+- Both "Import from YAML" forms (the main Add-integration flow's "Import
+  a composed device from YAML", and any device's "Import entities from
+  YAML") now also accept a `.yaml`/`.yml` **file** - drag one onto the
+  form or click to browse for one - alongside the original paste-a-block
+  text box. Either one works on its own; if you fill in both, the chosen
+  file wins. Needs the built-in `file_upload` integration, which Home
+  Assistant now sets up automatically as this integration's dependency.
+
 ## 5.5.0
 
 ### Added

@@ -82,6 +82,10 @@ every entity in it is created together, in one step.
   entities from YAML"** choice next to Add/Remove, for adding several
   entities onto that *same* device at once (no `name:` needed there).
 
+Either form takes the YAML two ways: drag a `.yaml`/`.yml` file onto it
+(or click to browse for one), or paste the block into the text box -
+whichever's easier. If both are filled in, the chosen file wins.
+
 Each item in `components:` takes the same fields the wizard itself would
 ask for - `device_type` (any domain from the table below), and
 `show_as` / `image_source` / `options` for the domains that need one

@@ -52,8 +52,9 @@
       },
       "yaml_import": {
         "title": "Import from YAML",
-        "description": "Paste a top-level `name:` plus a `components:` list - each item needs a `device_type` (a real HA domain this integration supports) and, for domains that need one, `show_as` / `image_source` / `options`, exactly like the matching wizard step would ask for. Every item also accepts an optional `name:` to override its default label (e.g. \"PIR\" instead of the generic \"Motion\"), and Number/Text/Select/Date/Time/Date & Time accept the same config fields their matching Home Assistant Helper does - unit/min/max/step/mode for Number, min/max/pattern/mode for Text, an `initial` starting value for any of them. Creates a whole new composed device in one step. See the README for the full format and a worked example.",
+        "description": "Drag a `.yaml`/`.yml` file onto this form (or click to choose one) to import it directly, or paste the block into the text box instead - either one is enough, and a chosen file always wins if both are filled in. Needs a top-level `name:` plus a `components:` list - each item needs a `device_type` (a real HA domain this integration supports) and, for domains that need one, `show_as` / `image_source` / `options`, exactly like the matching wizard step would ask for. Every item also accepts an optional `name:` to override its default label (e.g. \"PIR\" instead of the generic \"Motion\"), and Number/Text/Select/Date/Time/Date & Time accept the same config fields their matching Home Assistant Helper does - unit/min/max/step/mode for Number, min/max/pattern/mode for Text, an `initial` starting value for any of them. Creates a whole new composed device in one step. See the README for the full format and a worked example.",
         "data": {
+          "yaml_file": "Import from file",
           "yaml": "YAML"
         }
       }
@@ -112,8 +113,9 @@
       },
       "import_yaml": {
         "title": "Import entities from YAML",
-        "description": "Paste a `components:` list (same format as the main flow's YAML import, including the optional per-item `name:` override and the Number/Text/Select/Date/Time/Date & Time helper-config fields - a top-level `name:` is accepted but ignored, since this device already has one) to add every entity in it onto THIS device in one step.",
+        "description": "Drag a `.yaml`/`.yml` file onto this form (or click to choose one), or paste the block into the text box instead - either one is enough, and a chosen file always wins if both are filled in. Same format as the main flow's YAML import, including the optional per-item `name:` override and the Number/Text/Select/Date/Time/Date & Time helper-config fields - a top-level `name:` is accepted but ignored, since this device already has one. Adds every entity in it onto THIS device in one step.",
         "data": {
+          "yaml_file": "Import from file",
           "yaml": "YAML"
         }
       }
