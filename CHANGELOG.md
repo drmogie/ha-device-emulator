@@ -2,6 +2,18 @@
 
 All notable changes to Device Emulator are documented here, newest first.
 
+## 5.5.2
+
+### Fixed
+- `5.5.1`'s file-picker addition imported `process_uploaded_file` from
+  `homeassistant.helpers.file_upload`, which doesn't exist as of the
+  current Home Assistant core - that function actually lives in
+  `homeassistant.components.file_upload`. This broke the ENTIRE
+  integration (every existing device, not just YAML import) with
+  "Platform device_emulator.config_flow not found" until this release -
+  confirmed and fixed after a live install on a real server. `FileSelector`
+  itself, and everything else `5.5.1` added, was correct and unaffected.
+
 ## 5.5.1
 
 ### Added
