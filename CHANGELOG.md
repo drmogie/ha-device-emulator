@@ -2,6 +2,38 @@
 
 All notable changes to Device Emulator are documented here, newest first.
 
+## 5.5.0
+
+### Added
+- **YAML import can now name and configure individual entities**, so a
+  composed device can carry a real device's exact names and value
+  ranges instead of generic labels and one-size-fits-all values:
+  - Every item in `components:` accepts an optional **`name:`** that
+    overrides its default label - the fix that lets two entities of
+    the same type on one device (two `light`s, two `number`s, ...)
+    stay distinguishable instead of colliding on an identical generic
+    name, and lets a composed device use the real device's own entity
+    names (e.g. "PIR" instead of "Motion").
+  - **Number**, **Text**, **Select**, **Date**, **Time**, and
+    **Date & Time** now accept the same config fields their matching
+    Home Assistant Helper does: `unit`/`min`/`max`/`step`/`mode` for
+    Number, `min`/`max`/`pattern`/`mode` for Text, and an `initial`
+    starting value for any of the six. Left out, every field falls
+    back exactly the way it always has (no unit, 0-100 step-1 number,
+    today/now for date/time/datetime, first option for Select) - none
+    of this is required.
+  - Same validation approach as the rest of YAML import: bad values
+    (min without max, an out-of-range initial, an invalid regex
+    pattern, a mode that isn't one of the real options, ...) are
+    rejected right on the form with a specific reason, and fields that
+    don't apply to a component's `device_type` are simply ignored
+    rather than rejected.
+  - README's worked "Basement Bathroom EPO (Fake)" example now uses
+    real per-entity names and real number ranges/units/starting values
+    pulled from an actual Everything Presence One, instead of generic
+    placeholders - directly resolving the caveat the old example used
+    to carry about not being able to match a real device closely.
+
 ## 5.4.0
 
 ### Added

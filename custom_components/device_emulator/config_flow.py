@@ -77,14 +77,24 @@ _YAML_IMPORT_EXAMPLE = """name: My Composed Device
 components:
   - device_type: binary_sensor
     show_as: motion
-  - device_type: sensor
-    show_as: temperature
+    name: PIR
+  - device_type: number
+    name: Humidity Offset
+    unit: "%"
+    min: -50
+    max: 50
+    step: 0.1
 """
 _YAML_IMPORT_EXAMPLE_NO_NAME = """components:
   - device_type: binary_sensor
     show_as: motion
-  - device_type: sensor
-    show_as: temperature
+    name: PIR
+  - device_type: number
+    name: Humidity Offset
+    unit: "%"
+    min: -50
+    max: 50
+    step: 0.1
 """
 
 

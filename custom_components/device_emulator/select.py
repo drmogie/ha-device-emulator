@@ -142,7 +142,10 @@ class FakeStandaloneSelect(FakeEntityMixin, SelectEntity, RestoreEntity):
     FakeEntityMixin like a "real" entity does, instead of being exempt
     from the "Simulated status" override the way a hidden control is.
     Its option list is whatever comma-separated string was entered in
-    the config flow's "options" step (see Component.option_list).
+    the config flow's "options" step (see Component.option_list). Starts
+    on `initial` if a YAML import gave one (validated to actually be one
+    of the options in const.py's _apply_select_initial()), otherwise on
+    the first option, same as always.
     """
 
     _attr_has_entity_name = True
@@ -154,7 +157,9 @@ class FakeStandaloneSelect(FakeEntityMixin, SelectEntity, RestoreEntity):
         self._attr_unique_id = f"{component.id}_select"
         self._attr_device_info = device_info_for(component.entry)
         self._attr_options = component.option_list
-        self._attr_current_option = self._attr_options[0]
+        self._attr_current_option = (
+            component.initial if component.initial in self._attr_options else self._attr_options[0]
+        )
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

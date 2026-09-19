@@ -200,7 +200,7 @@ class FakeGenericSensor(FakeEntityMixin, SensorEntity, RestoreEntity):
         self._is_battery = show_as == "battery"
         label, unit, default, _min, _max, _step = SENSOR_SHOW_AS_SPECS[show_as]
 
-        self._attr_name = label
+        self._attr_name = component.name or label
         self._attr_unique_id = f"{component.id}_sensor"
         self._attr_device_class = DEVICE_CLASS_MAP.get(show_as)
         self._attr_native_unit_of_measurement = unit

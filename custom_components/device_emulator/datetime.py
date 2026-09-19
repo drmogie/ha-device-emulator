@@ -43,7 +43,11 @@ class FakeDateTime(FakeEntityMixin, DateTimeEntity, RestoreEntity):
         self._attr_name = component.label
         self._attr_unique_id = f"{component.id}_datetime"
         self._attr_device_info = device_info_for(component.entry)
-        self._attr_native_value = dt_util.now().replace(microsecond=0)
+        self._attr_native_value = (
+            dt_util.parse_datetime(component.initial)
+            if component.initial is not None
+            else dt_util.now().replace(microsecond=0)
+        )
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

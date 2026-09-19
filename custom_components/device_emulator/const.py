@@ -1,14 +1,17 @@
 """Constants for the Device Emulator integration."""
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass
+from datetime import date as date_cls, time as time_cls
 from typing import Any
 
 import yaml
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.util import dt as dt_util
 
 DOMAIN = "device_emulator"
 
@@ -18,6 +21,27 @@ CONF_DEVICE_TYPE = "device_type"
 CONF_SHOW_AS = "show_as"
 CONF_IMAGE_SOURCE = "image_source"
 CONF_OPTIONS = "options"
+
+# Universal per-component override, accepted for every device_type via YAML
+# import - lets a composed device's entities carry distinct, real-world
+# names (e.g. "PIR" instead of the generic "Motion" show-as label) instead
+# of colliding on identical generic names. Never settable from the wizard
+# (which has no "name" step of its own) - only ever set on a component via
+# parse_components_yaml()/build_component_from_spec() below.
+CONF_NAME = "name"
+
+# Extra per-component fields accepted for specific device_types via YAML
+# import only, mirroring the config options Home Assistant's own matching
+# "Helper" (input_number/input_text/input_select) actually exposes - see
+# NUMBER_ONLY_KEYS / TEXT_ONLY_KEYS / SELECT_ONLY_KEYS / DATETIME_ONLY_KEYS
+# below for which device_type each applies to.
+CONF_UNIT = "unit"          # number
+CONF_MIN = "min"            # number (value bound) / text (length bound)
+CONF_MAX = "max"            # number (value bound) / text (length bound)
+CONF_STEP = "step"          # number
+CONF_MODE = "mode"          # number ("box"/"slider"/"auto") / text ("text"/"password")
+CONF_PATTERN = "pattern"    # text (a validation regex)
+CONF_INITIAL = "initial"    # number / text / select / date / time / datetime
 
 # Transient config-flow field for the "Import from YAML" form - never stored
 # on the entry itself, just parsed into component dicts by
@@ -335,11 +359,27 @@ class Component:
     show_as: str | None = None
     image_source: str | None = None
     options: str | None = None
+    name: str | None = None
+    unit: str | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    step: float | None = None
+    mode: str | None = None
+    pattern: str | None = None
+    initial: Any = None
 
     @property
     def label(self) -> str | None:
-        """The "show as" label, e.g. "Temperature" or "Garage Door", if any."""
-        return show_as_label(self.device_type, self.show_as)
+        """This entity's display name.
+
+        A custom `name:` from a YAML import always wins - that's the whole
+        point of it, letting a composed device's entities carry distinct,
+        real names (e.g. "PIR") instead of colliding on an identical
+        generic one. Falls back to the "show as" label (e.g. "Temperature"
+        or "Garage Door") when no custom name was given, exactly as
+        before this field existed.
+        """
+        return self.name or show_as_label(self.device_type, self.show_as)
 
     @property
     def option_list(self) -> list[str]:
@@ -364,6 +404,14 @@ def components_for(entry: ConfigEntry) -> list[Component]:
             show_as=c.get(CONF_SHOW_AS),
             image_source=c.get(CONF_IMAGE_SOURCE),
             options=c.get(CONF_OPTIONS),
+            name=c.get(CONF_NAME),
+            unit=c.get(CONF_UNIT),
+            min_value=c.get(CONF_MIN),
+            max_value=c.get(CONF_MAX),
+            step=c.get(CONF_STEP),
+            mode=c.get(CONF_MODE),
+            pattern=c.get(CONF_PATTERN),
+            initial=c.get(CONF_INITIAL),
         )
         for c in entry.data.get(CONF_COMPONENTS, [])
     ]
@@ -416,7 +464,183 @@ def build_component_from_spec(spec: Any) -> dict[str, Any]:
     if device_type in OPTIONS_ENTRY_TYPES:
         component[CONF_OPTIONS] = spec.get(CONF_OPTIONS) or DEFAULT_SELECT_OPTIONS
 
+    name = spec.get(CONF_NAME)
+    if name is not None:
+        if not isinstance(name, str) or not name.strip():
+            raise YamlSpecError(f"{device_type}: name must be a non-empty string if given")
+        component[CONF_NAME] = name.strip()
+
+    if device_type == DEVICE_TYPE_NUMBER:
+        _apply_number_fields(spec, component)
+    elif device_type == DEVICE_TYPE_TEXT:
+        _apply_text_fields(spec, component)
+    elif device_type == DEVICE_TYPE_SELECT:
+        _apply_select_initial(spec, component)
+    elif device_type in (DEVICE_TYPE_DATE, DEVICE_TYPE_TIME, DEVICE_TYPE_DATETIME):
+        _apply_datetime_initial(device_type, spec, component)
+
     return component
+
+
+def _apply_number_fields(spec: dict[str, Any], component: dict[str, Any]) -> None:
+    """Validate and apply Number's helper-config-style fields onto `component`.
+
+    Mirrors what a real `input_number` helper lets you configure: a unit,
+    a min/max range, a step, a display mode (box/slider/auto), and a
+    starting value - instead of this integration's old fixed generic
+    0-100/step-1 range with no unit.
+    """
+    unit = spec.get(CONF_UNIT)
+    if unit is not None:
+        if not isinstance(unit, str) or not unit.strip():
+            raise YamlSpecError("number: unit must be a non-empty string if given")
+        component[CONF_UNIT] = unit.strip()
+
+    min_v = spec.get(CONF_MIN)
+    max_v = spec.get(CONF_MAX)
+    if (min_v is None) != (max_v is None):
+        raise YamlSpecError("number: min and max must both be given together, or neither")
+    if min_v is not None:
+        for key, val in ((CONF_MIN, min_v), (CONF_MAX, max_v)):
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                raise YamlSpecError(f"number: {key} must be a number")
+        if min_v >= max_v:
+            raise YamlSpecError("number: min must be less than max")
+        component[CONF_MIN] = float(min_v)
+        component[CONF_MAX] = float(max_v)
+
+    step_v = spec.get(CONF_STEP)
+    if step_v is not None:
+        if isinstance(step_v, bool) or not isinstance(step_v, (int, float)) or step_v <= 0:
+            raise YamlSpecError("number: step must be a positive number")
+        component[CONF_STEP] = float(step_v)
+
+    mode_v = spec.get(CONF_MODE)
+    if mode_v is not None:
+        if mode_v not in ("box", "slider", "auto"):
+            raise YamlSpecError('number: mode must be "box", "slider", or "auto"')
+        component[CONF_MODE] = mode_v
+
+    initial_v = spec.get(CONF_INITIAL)
+    if initial_v is not None:
+        if isinstance(initial_v, bool) or not isinstance(initial_v, (int, float)):
+            raise YamlSpecError("number: initial must be a number")
+        lo = component.get(CONF_MIN, 0.0)
+        hi = component.get(CONF_MAX, 100.0)
+        if not lo <= initial_v <= hi:
+            raise YamlSpecError(
+                f"number: initial ({initial_v}) must be between min ({lo}) and max ({hi})"
+            )
+        component[CONF_INITIAL] = float(initial_v)
+
+
+def _apply_text_fields(spec: dict[str, Any], component: dict[str, Any]) -> None:
+    """Validate and apply Text's helper-config-style fields onto `component`.
+
+    Mirrors a real `input_text` helper: a min/max length, a validation
+    pattern (regex), a display mode (text/password), and a starting value.
+    """
+    min_v = spec.get(CONF_MIN)
+    max_v = spec.get(CONF_MAX)
+    for key, val in ((CONF_MIN, min_v), (CONF_MAX, max_v)):
+        if val is not None:
+            if isinstance(val, bool) or not isinstance(val, int) or val < 0:
+                raise YamlSpecError(f"text: {key} must be a non-negative whole number")
+    if min_v is not None:
+        component[CONF_MIN] = int(min_v)
+    if max_v is not None:
+        component[CONF_MAX] = int(max_v)
+    if (
+        component.get(CONF_MIN) is not None
+        and component.get(CONF_MAX) is not None
+        and component[CONF_MIN] > component[CONF_MAX]
+    ):
+        raise YamlSpecError("text: min must not be greater than max")
+
+    pattern_v = spec.get(CONF_PATTERN)
+    if pattern_v is not None:
+        if not isinstance(pattern_v, str) or not pattern_v.strip():
+            raise YamlSpecError("text: pattern must be a non-empty string if given")
+        try:
+            re.compile(pattern_v)
+        except re.error as err:
+            raise YamlSpecError(f"text: pattern is not a valid regex: {err}") from err
+        component[CONF_PATTERN] = pattern_v
+
+    mode_v = spec.get(CONF_MODE)
+    if mode_v is not None:
+        if mode_v not in ("text", "password"):
+            raise YamlSpecError('text: mode must be "text" or "password"')
+        component[CONF_MODE] = mode_v
+
+    initial_v = spec.get(CONF_INITIAL)
+    if initial_v is not None:
+        if not isinstance(initial_v, str):
+            raise YamlSpecError("text: initial must be a string")
+        lo = component.get(CONF_MIN, 0)
+        hi = component.get(CONF_MAX, 255)
+        if not lo <= len(initial_v) <= hi:
+            raise YamlSpecError(
+                f"text: initial's length ({len(initial_v)}) must be between "
+                f"min ({lo}) and max ({hi})"
+            )
+        component[CONF_INITIAL] = initial_v
+
+
+def _apply_select_initial(spec: dict[str, Any], component: dict[str, Any]) -> None:
+    """Validate and apply Select's optional starting option onto `component`.
+
+    Mirrors a real `input_select` helper's own `initial` field - which of
+    the configured options to start on, instead of always defaulting to
+    the first one.
+    """
+    initial_v = spec.get(CONF_INITIAL)
+    if initial_v is None:
+        return
+    if not isinstance(initial_v, str):
+        raise YamlSpecError("select: initial must be a string")
+    parsed_options = [o.strip() for o in component[CONF_OPTIONS].split(",") if o.strip()]
+    if initial_v not in parsed_options:
+        raise YamlSpecError(
+            f"select: initial {initial_v!r} must be one of the configured options: "
+            + ", ".join(parsed_options)
+        )
+    component[CONF_INITIAL] = initial_v
+
+
+def _apply_datetime_initial(
+    device_type: str, spec: dict[str, Any], component: dict[str, Any]
+) -> None:
+    """Validate and apply Date/Time/Date & Time's optional starting value.
+
+    Mirrors a real `input_datetime` helper's own `initial` field, instead
+    of always defaulting to today/now.
+    """
+    initial_v = spec.get(CONF_INITIAL)
+    if initial_v is None:
+        return
+    if not isinstance(initial_v, str):
+        raise YamlSpecError(f"{device_type}: initial must be a string")
+
+    valid = False
+    if device_type == DEVICE_TYPE_DATE:
+        try:
+            date_cls.fromisoformat(initial_v)
+            valid = True
+        except ValueError:
+            pass
+    elif device_type == DEVICE_TYPE_TIME:
+        try:
+            time_cls.fromisoformat(initial_v)
+            valid = True
+        except ValueError:
+            pass
+    else:
+        valid = dt_util.parse_datetime(initial_v) is not None
+
+    if not valid:
+        raise YamlSpecError(f"{device_type}: initial {initial_v!r} is not a valid ISO value")
+    component[CONF_INITIAL] = initial_v
 
 
 def parse_components_yaml(raw: str) -> tuple[list[dict[str, Any]], str | None]:
@@ -428,8 +652,34 @@ def parse_components_yaml(raw: str) -> tuple[list[dict[str, Any]], str | None]:
         components:                   # device - ignored when importing onto
           - device_type: binary_sensor  # an existing one
             show_as: motion
-          - device_type: sensor
-            show_as: temperature
+            name: PIR                   # optional - overrides the generic
+                                         # "Motion" label with a real name
+          - device_type: number
+            name: Humidity Offset
+            unit: "%"
+            min: -50
+            max: 50
+            step: 0.1
+
+    Every component accepts an optional `name:` (any device_type) that
+    overrides its default show-as/generic entity name - the fix for a
+    composed device otherwise ending up with several identically-named
+    entities (e.g. ten generic "Number" sliders). A handful of domains
+    also accept the same config fields their real Home Assistant "Helper"
+    equivalent does, letting a component be modeled far more accurately
+    than the old fixed generic default:
+
+      - number (like input_number): unit, min, max, step,
+        mode ("box"/"slider"/"auto"), initial
+      - text (like input_text): min, max (length bounds), pattern (regex),
+        mode ("text"/"password"), initial
+      - select (like input_select): initial (must be one of `options`)
+      - date / time / datetime (like input_datetime): initial (an ISO
+        date/time/datetime string)
+
+    See build_component_from_spec() and its per-domain
+    _apply_*_fields()/_apply_*_initial() helpers below for the exact
+    validation rules, and the README for full worked examples.
 
     Raises YamlSpecError with a human-readable reason on anything wrong -
     bad YAML syntax, the wrong top-level shape, an empty/missing

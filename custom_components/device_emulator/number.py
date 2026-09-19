@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from homeassistant.components.number import NumberDeviceClass, NumberEntity
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
@@ -152,7 +152,7 @@ class FakeSensorValueNumber(NumberEntity):
         self._is_battery = show_as == "battery"
         label, unit, default, minimum, maximum, step = SENSOR_SHOW_AS_SPECS[show_as]
 
-        self._attr_name = f"{label} Value"
+        self._attr_name = f"{component.name or label} Value"
         self._attr_unique_id = f"{component.id}_value_control"
         self._attr_device_info = device_info_for(component.entry)
         self._attr_native_unit_of_measurement = unit
@@ -281,12 +281,14 @@ class FakeStandaloneNumber(FakeEntityMixin, NumberEntity, RestoreEntity):
     FakeEntityMixin/RestoreEntity like a "real" entity does, instead of
     being exempt from the "Simulated status" override like the hidden
     controls above.
+
+    Its unit/min/max/step/mode/starting value all default the same way
+    they always have (no unit, 0-100, step 1, auto mode, 50) unless a
+    YAML import supplied real ones - see const.py's _apply_number_fields()
+    - so a component built through the wizard behaves exactly as before.
     """
 
     _attr_has_entity_name = True
-    _attr_native_min_value = 0
-    _attr_native_max_value = 100
-    _attr_native_step = 1
 
     def __init__(self, component: Component) -> None:
         self._component = component
@@ -294,7 +296,22 @@ class FakeStandaloneNumber(FakeEntityMixin, NumberEntity, RestoreEntity):
         self._attr_name = component.label
         self._attr_unique_id = f"{component.id}_number"
         self._attr_device_info = device_info_for(component.entry)
-        self._attr_native_value = 50
+        self._attr_native_unit_of_measurement = component.unit
+        self._attr_native_min_value = (
+            component.min_value if component.min_value is not None else 0.0
+        )
+        self._attr_native_max_value = (
+            component.max_value if component.max_value is not None else 100.0
+        )
+        self._attr_native_step = component.step if component.step is not None else 1.0
+        if component.mode is not None:
+            self._attr_mode = NumberMode(component.mode)
+        if component.initial is not None:
+            self._attr_native_value = component.initial
+        else:
+            self._attr_native_value = (
+                self._attr_native_min_value + self._attr_native_max_value
+            ) / 2
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

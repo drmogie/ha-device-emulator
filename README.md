@@ -91,66 +91,178 @@ Invalid YAML, an unknown `device_type`, a `show_as` that domain doesn't
 have, or a missing required field is rejected right on the form with a
 specific reason - nothing partially imports.
 
+Every item also takes an optional **`name:`** to override its default
+label - handy the moment a device has more than one entity of the same
+type (two `light`s, two `number`s, ...) that would otherwise collide on
+an identical generic name, and for giving entities the same names the
+real device uses (e.g. `PIR` instead of the generic `Motion`).
+
+Number, Text, Select, Date, Time, and Date & Time also accept the same
+config fields their matching Home Assistant **Helper** does, so a
+composed device can carry a real device's actual ranges and starting
+values instead of one generic 0-100 slider for every number:
+
+| Domain | Fields | Notes |
+|---|---|---|
+| `number` | `unit`, `min`, `max`, `step`, `mode`, `initial` | `mode` is `box`, `slider`, or `auto`. `min`/`max` must both be given together (or neither). |
+| `text` | `min`, `max`, `pattern`, `mode`, `initial` | `min`/`max` are character-length bounds. `mode` is `text` or `password`. `pattern` is a validation regex. |
+| `select` | `initial` | Must be one of the comma-separated `options`. |
+| `date` / `time` / `datetime` | `initial` | An ISO date/time/date-time string. |
+
+Left out, every one of these falls back exactly the way it always has
+(no unit, 0-100 step-1 number, today/now for date/time/datetime, first
+option for Select) - none of this is required, it's there for when you
+want a fake entity to behave like the real one it's standing in for.
+
 ```yaml
 name: My Composed Device
 components:
   - device_type: binary_sensor
     show_as: motion
+    name: PIR
   - device_type: sensor
     show_as: temperature
   - device_type: select
     options: "Low, Medium, High"
+  - device_type: number
+    name: Humidity Offset
+    unit: "%"
+    min: -50
+    max: 50
+    step: 0.1
 ```
 
 A larger, real-world example - a fake stand-in for a multi-sensor
 presence device (PIR, mmWave, occupancy, temperature/humidity/
 illuminance, status LEDs, a firmware update entity, and its config
-numbers/selects) for testing dashboards without needing that hardware
-on hand:
+numbers/selects), named and ranged to match that real device closely
+enough to actually exercise a dashboard or automation built for it,
+without needing the hardware on hand:
 
 ```yaml
 name: Basement Bathroom EPO (Fake)
 components:
   - device_type: binary_sensor
-    show_as: motion       # PIR
+    show_as: motion
+    name: PIR
   - device_type: binary_sensor
-    show_as: occupancy    # Occupancy
+    show_as: occupancy
+    name: Occupancy
   - device_type: binary_sensor
-    show_as: presence     # mmWave
-  - device_type: light    # ESP32 status LED
-  - device_type: light    # mmWave LED
+    show_as: presence
+    name: mmWave
+  - device_type: light
+    name: ESP32 status LED
+  - device_type: light
+    name: mmWave LED
   - device_type: sensor
     show_as: temperature
   - device_type: sensor
     show_as: illuminance
   - device_type: sensor
     show_as: humidity
-  - device_type: switch   # mmWave sensor enable
-  - device_type: button   # Safe mode
-  - device_type: button   # Restart
-  - device_type: update   # Firmware update
+  - device_type: switch
+    name: mmWave sensor
+  - device_type: button
+    name: Safe mode
+  - device_type: button
+    name: Restart
+  - device_type: update
+    name: Firmware
   - device_type: select
-    options: "Disabled, Enabled"   # Bluetooth Proxy
+    name: Bluetooth Proxy
+    options: "Disabled, Enabled"
+    initial: Enabled
   - device_type: select
-    options: "Disabled, Enabled"   # CO2 Sensor
-  - device_type: number   # Occupancy off latency
-  - device_type: number   # PIR off latency
-  - device_type: number   # PIR on latency
-  - device_type: number   # Temperature offset
-  - device_type: number   # Humidity offset
-  - device_type: number   # Illuminance offset
-  - device_type: number   # mmWave distance
-  - device_type: number   # mmWave off latency
-  - device_type: number   # mmWave on latency
-  - device_type: number   # mmWave sensitivity
+    name: CO2 Sensor
+    options: "Disabled, Enabled"
+    initial: Disabled
+  - device_type: number
+    name: Occupancy off latency
+    unit: seconds
+    min: 1
+    max: 600
+    step: 5
+    mode: slider
+    initial: 121
+  - device_type: number
+    name: PIR off latency
+    unit: seconds
+    min: 1
+    max: 120
+    step: 1
+    mode: slider
+    initial: 30
+  - device_type: number
+    name: PIR on latency
+    unit: seconds
+    min: 0
+    max: 2
+    step: 0.25
+    mode: slider
+    initial: 0.25
+  - device_type: number
+    name: Temperature Offset
+    unit: "°C"
+    min: -20
+    max: 20
+    step: 0.1
+    mode: box
+    initial: -2.8
+  - device_type: number
+    name: Humidity Offset
+    unit: "%"
+    min: -50
+    max: 50
+    step: 0.1
+    mode: box
+    initial: 4.4
+  - device_type: number
+    name: Illuminance Offset
+    unit: lx
+    min: -50
+    max: 50
+    step: 1
+    mode: box
+    initial: 0
+  - device_type: number
+    name: mmWave distance
+    unit: cm
+    min: 0
+    max: 800
+    step: 15
+    mode: slider
+    initial: 250
+  - device_type: number
+    name: mmWave off latency
+    unit: seconds
+    min: 1
+    max: 600
+    step: 5
+    mode: slider
+    initial: 60
+  - device_type: number
+    name: mmWave on latency
+    unit: seconds
+    min: 0
+    max: 2
+    step: 0.25
+    mode: slider
+    initial: 0.25
+  - device_type: number
+    name: mmWave sensitivity
+    min: 0
+    max: 9
+    step: 1
+    mode: auto
+    initial: 4
 ```
 
-Two things worth knowing: every `number` here is the same generic
-0-100 settable value (Device Emulator doesn't model each real device's
-actual min/max/unit), and two identically-typed components with no
-`show_as` to tell them apart (like the two `light` entries above) get
-the same generic label - fine for exercising a dashboard/automation,
-but they won't carry a real device's exact ranges or per-entity names.
+Every name and number in this example was pulled straight from a real
+Everything Presence One's entities (unit, min, max, step, mode, and
+current value), except **PIR on latency**, whose own entity wasn't
+available to read at the time - that one's values are modeled on the
+structurally identical "mmWave on latency" entity rather than guessed.
 
 ## Every device gets a "Simulated status" control
 
@@ -189,12 +301,12 @@ itself affected by the override, so you can always click back to Normal.
 | `image` | - | `image` + hidden `button` | Same source options as camera, but fetched once and held static until the hidden "Refresh image" button is pressed. |
 | `device_tracker` | - | `device_tracker`, `select`, hidden `button` | "Zone" dropdown is populated from the zones actually defined in your Home Assistant (gathered on startup/creation, or on demand via the hidden "Refresh zones" button) - pick one, or "Not Home". |
 | `air_quality` | - | `air_quality`, `number` | Legacy domain, still functional. Reports PM2.5, set directly with the hidden number. |
-| `text` | - | `text` | A settable free-text value (up to 255 characters) - holds whatever you last typed into it. |
-| `number` | - | `number` | A settable numeric value (0-100, step 1) - holds whatever you last set it to. |
-| `select` | - | `select` | A settable dropdown. You choose its options (comma-separated) when adding it. |
-| `date` | - | `date` | A settable date, defaulting to today. |
-| `time` | - | `time` | A settable time of day, defaulting to now. |
-| `datetime` | - | `datetime` | A settable date + time, defaulting to now. |
+| `text` | - | `text` | A settable free-text value (up to 255 characters by default) - holds whatever you last typed into it. Via YAML import, takes the same `min`/`max`/`pattern`/`mode`/`initial` fields as HA's Text helper. |
+| `number` | - | `number` | A settable numeric value (0-100, step 1 by default) - holds whatever you last set it to. Via YAML import, takes the same `unit`/`min`/`max`/`step`/`mode`/`initial` fields as HA's Number helper. |
+| `select` | - | `select` | A settable dropdown. You choose its options (comma-separated) when adding it. Via YAML import, an `initial` field picks the starting option. |
+| `date` | - | `date` | A settable date, defaulting to today. Via YAML import, an `initial` field sets the starting date. |
+| `time` | - | `time` | A settable time of day, defaulting to now. Via YAML import, an `initial` field sets the starting time. |
+| `datetime` | - | `datetime` | A settable date + time, defaulting to now. Via YAML import, an `initial` field sets the starting value. |
 
 Image sources: type a full URL, or a filename relative to your `www` folder
 (served at `/local/`) - e.g. `porch.jpg` for `config/www/porch.jpg`.
