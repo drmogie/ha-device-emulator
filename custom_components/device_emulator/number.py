@@ -29,6 +29,7 @@ from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     Component,
@@ -36,6 +37,7 @@ from .const import (
     DEVICE_TYPE_CLIMATE,
     DEVICE_TYPE_HUMIDIFIER,
     DEVICE_TYPE_LAWN_MOWER,
+    DEVICE_TYPE_NUMBER,
     DEVICE_TYPE_SENSOR,
     DEVICE_TYPE_VACUUM,
     DEVICE_TYPE_WATER_HEATER,
@@ -44,6 +46,7 @@ from .const import (
     device_info_for,
 )
 from .helpers import get_entity
+from .mixins import FakeEntityMixin
 
 POLL_INTERVAL = timedelta(seconds=5)
 
@@ -66,6 +69,8 @@ async def async_setup_entry(
             entities.append(FakeCurrentHumidityNumber(component))
         elif component.device_type == DEVICE_TYPE_AIR_QUALITY:
             entities.append(FakePm25Number(component))
+        elif component.device_type == DEVICE_TYPE_NUMBER:
+            entities.append(FakeStandaloneNumber(component))
     async_add_entities(entities)
 
 
@@ -263,3 +268,43 @@ class FakePm25Number(NumberEntity):
         sibling = get_entity(self.hass, self._component.id, "air_quality_entity")
         if sibling is not None:
             sibling.set_pm25(value)
+
+
+class FakeStandaloneNumber(FakeEntityMixin, NumberEntity, RestoreEntity):
+    """A simulated settable numeric value for the standalone Number device.
+
+    Unlike every other class in this file (all hidden CONFIG-category
+    controls for a sibling entity on some other domain), this one IS the
+    primary, visible entity for its own device - holding whatever value
+    you last set it to is the entire point, the same role
+    sensor.py's FakeGenericSensor plays for the Sensor domain. So it gets
+    FakeEntityMixin/RestoreEntity like a "real" entity does, instead of
+    being exempt from the "Simulated status" override like the hidden
+    controls above.
+    """
+
+    _attr_has_entity_name = True
+    _attr_native_min_value = 0
+    _attr_native_max_value = 100
+    _attr_native_step = 1
+
+    def __init__(self, component: Component) -> None:
+        self._component = component
+        self._entry = component.entry
+        self._attr_name = component.label
+        self._attr_unique_id = f"{component.id}_number"
+        self._attr_device_info = device_info_for(component.entry)
+        self._attr_native_value = 50
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._register_for_status_updates()
+        if (last_state := await self.async_get_last_state()) is not None:
+            try:
+                self._attr_native_value = float(last_state.state)
+            except (TypeError, ValueError):
+                pass
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._attr_native_value = value
+        self.async_write_ha_state()

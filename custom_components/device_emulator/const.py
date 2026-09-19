@@ -13,6 +13,7 @@ CONF_COMPONENT_ID = "id"
 CONF_DEVICE_TYPE = "device_type"
 CONF_SHOW_AS = "show_as"
 CONF_IMAGE_SOURCE = "image_source"
+CONF_OPTIONS = "options"
 
 # Entry-level config key: entry.data[CONF_COMPONENTS] is a list of component
 # dicts. The first is created by the initial "Add integration" flow; more
@@ -52,6 +53,12 @@ DEVICE_TYPE_CAMERA = "camera"
 DEVICE_TYPE_IMAGE = "image"
 DEVICE_TYPE_DEVICE_TRACKER = "device_tracker"
 DEVICE_TYPE_AIR_QUALITY = "air_quality"
+DEVICE_TYPE_TEXT = "text"
+DEVICE_TYPE_NUMBER = "number"
+DEVICE_TYPE_SELECT = "select"
+DEVICE_TYPE_DATE = "date"
+DEVICE_TYPE_TIME = "time"
+DEVICE_TYPE_DATETIME = "datetime"
 
 DEVICE_TYPE_LABELS = {
     DEVICE_TYPE_SWITCH: "Switch",
@@ -77,6 +84,12 @@ DEVICE_TYPE_LABELS = {
     DEVICE_TYPE_IMAGE: "Image",
     DEVICE_TYPE_DEVICE_TRACKER: "Device Tracker",
     DEVICE_TYPE_AIR_QUALITY: "Air Quality",
+    DEVICE_TYPE_TEXT: "Text",
+    DEVICE_TYPE_NUMBER: "Number",
+    DEVICE_TYPE_SELECT: "Select",
+    DEVICE_TYPE_DATE: "Date",
+    DEVICE_TYPE_TIME: "Time",
+    DEVICE_TYPE_DATETIME: "Date & Time",
 }
 
 # Every domain is addable as a component via "Configure" or the main
@@ -220,6 +233,11 @@ SHOW_AS_OPTIONS = {
 # Device types that need a third "image source" step (a URL or a /local/ path).
 IMAGE_SOURCE_TYPES = (DEVICE_TYPE_CAMERA, DEVICE_TYPE_IMAGE)
 
+# Device types that need an "options" step (a comma-separated list of
+# choices for the standalone Select device - see FakeStandaloneSelect).
+OPTIONS_ENTRY_TYPES = (DEVICE_TYPE_SELECT,)
+DEFAULT_SELECT_OPTIONS = "Option 1, Option 2, Option 3"
+
 # Sentinel option for the device_tracker zone picker, mapped to an empty
 # in_zones list (device_tracker.py) rather than any real zone entity_id.
 DEVICE_TRACKER_NOT_HOME_OPTION = "Not Home"
@@ -274,6 +292,12 @@ PLATFORMS_BY_TYPE = {
     DEVICE_TYPE_IMAGE: ["image", "button"],
     DEVICE_TYPE_DEVICE_TRACKER: ["device_tracker", "select", "button"],
     DEVICE_TYPE_AIR_QUALITY: ["air_quality", "number"],
+    DEVICE_TYPE_TEXT: ["text"],
+    DEVICE_TYPE_NUMBER: ["number"],
+    DEVICE_TYPE_SELECT: ["select"],
+    DEVICE_TYPE_DATE: ["date"],
+    DEVICE_TYPE_TIME: ["time"],
+    DEVICE_TYPE_DATETIME: ["datetime"],
 }
 
 # Extra platforms needed only for specific (device_type, show_as) pairs.
@@ -301,11 +325,24 @@ class Component:
     device_type: str
     show_as: str | None = None
     image_source: str | None = None
+    options: str | None = None
 
     @property
     def label(self) -> str | None:
         """The "show as" label, e.g. "Temperature" or "Garage Door", if any."""
         return show_as_label(self.device_type, self.show_as)
+
+    @property
+    def option_list(self) -> list[str]:
+        """The parsed, comma-separated option list for a standalone Select.
+
+        Falls back to DEFAULT_SELECT_OPTIONS if nothing was configured (a
+        component built before this field existed, or an empty entry) so
+        there's always at least one selectable option.
+        """
+        raw = self.options or DEFAULT_SELECT_OPTIONS
+        parsed = [option.strip() for option in raw.split(",") if option.strip()]
+        return parsed or [DEFAULT_SELECT_OPTIONS]
 
 
 def components_for(entry: ConfigEntry) -> list[Component]:
@@ -317,6 +354,7 @@ def components_for(entry: ConfigEntry) -> list[Component]:
             device_type=c[CONF_DEVICE_TYPE],
             show_as=c.get(CONF_SHOW_AS),
             image_source=c.get(CONF_IMAGE_SOURCE),
+            options=c.get(CONF_OPTIONS),
         )
         for c in entry.data.get(CONF_COMPONENTS, [])
     ]
@@ -366,6 +404,12 @@ DEVICE_MODELS = {
     DEVICE_TYPE_IMAGE: "Image Emulator",
     DEVICE_TYPE_DEVICE_TRACKER: "Device Tracker Emulator",
     DEVICE_TYPE_AIR_QUALITY: "Air Quality Emulator",
+    DEVICE_TYPE_TEXT: "Text Emulator",
+    DEVICE_TYPE_NUMBER: "Number Emulator",
+    DEVICE_TYPE_SELECT: "Select Emulator",
+    DEVICE_TYPE_DATE: "Date Emulator",
+    DEVICE_TYPE_TIME: "Time Emulator",
+    DEVICE_TYPE_DATETIME: "Date & Time Emulator",
 }
 
 _SHOW_AS_LABEL_LOOKUPS = {

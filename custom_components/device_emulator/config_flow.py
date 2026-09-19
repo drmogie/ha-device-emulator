@@ -45,10 +45,13 @@ from .const import (
     CONF_COMPONENTS,
     CONF_DEVICE_TYPE,
     CONF_IMAGE_SOURCE,
+    CONF_OPTIONS,
     CONF_SHOW_AS,
+    DEFAULT_SELECT_OPTIONS,
     DEVICE_TYPE_LABELS,
     DOMAIN,
     IMAGE_SOURCE_TYPES,
+    OPTIONS_ENTRY_TYPES,
     SHOW_AS_OPTIONS,
     components_for,
     suggested_name,
@@ -96,6 +99,19 @@ class _ComponentStepsMixin:
         schema = vol.Schema({vol.Required(CONF_IMAGE_SOURCE): str})
         return self.async_show_form(step_id="image_source", data_schema=schema)
 
+    async def async_step_options(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Ask for the comma-separated list of choices a standalone Select offers."""
+        if user_input is not None:
+            self._data[CONF_OPTIONS] = user_input[CONF_OPTIONS]
+            return await self._next_step()
+
+        schema = vol.Schema(
+            {vol.Required(CONF_OPTIONS, default=DEFAULT_SELECT_OPTIONS): str}
+        )
+        return self.async_show_form(step_id="options", data_schema=schema)
+
     def _build_component(self) -> dict[str, Any]:
         """Turn self._data into a component dict with a fresh unique id."""
         component: dict[str, Any] = {
@@ -106,6 +122,8 @@ class _ComponentStepsMixin:
             component[CONF_SHOW_AS] = self._data[CONF_SHOW_AS]
         if CONF_IMAGE_SOURCE in self._data:
             component[CONF_IMAGE_SOURCE] = self._data[CONF_IMAGE_SOURCE]
+        if CONF_OPTIONS in self._data:
+            component[CONF_OPTIONS] = self._data[CONF_OPTIONS]
         return component
 
 
@@ -189,6 +207,9 @@ class DeviceEmulatorConfigFlow(
 
         if device_type in IMAGE_SOURCE_TYPES and CONF_IMAGE_SOURCE not in self._data:
             return await self.async_step_image_source()
+
+        if device_type in OPTIONS_ENTRY_TYPES and CONF_OPTIONS not in self._data:
+            return await self.async_step_options()
 
         if _TARGET_ENTRY_ID not in self._data:
             return await self.async_step_target()
@@ -325,6 +346,9 @@ class DeviceEmulatorOptionsFlow(_ComponentStepsMixin, config_entries.OptionsFlow
 
         if device_type in IMAGE_SOURCE_TYPES and CONF_IMAGE_SOURCE not in self._data:
             return await self.async_step_image_source()
+
+        if device_type in OPTIONS_ENTRY_TYPES and CONF_OPTIONS not in self._data:
+            return await self.async_step_options()
 
         return await self._finish()
 

@@ -106,9 +106,18 @@ itself affected by the override, so you can always click back to Normal.
 | `image` | - | `image` + hidden `button` | Same source options as camera, but fetched once and held static until the hidden "Refresh image" button is pressed. |
 | `device_tracker` | - | `device_tracker`, `select`, hidden `button` | "Zone" dropdown is populated from the zones actually defined in your Home Assistant (gathered on startup/creation, or on demand via the hidden "Refresh zones" button) - pick one, or "Not Home". |
 | `air_quality` | - | `air_quality`, `number` | Legacy domain, still functional. Reports PM2.5, set directly with the hidden number. |
+| `text` | - | `text` | A settable free-text value (up to 255 characters) - holds whatever you last typed into it. |
+| `number` | - | `number` | A settable numeric value (0-100, step 1) - holds whatever you last set it to. |
+| `select` | - | `select` | A settable dropdown. You choose its options (comma-separated) when adding it. |
+| `date` | - | `date` | A settable date, defaulting to today. |
+| `time` | - | `time` | A settable time of day, defaulting to now. |
+| `datetime` | - | `datetime` | A settable date + time, defaulting to now. |
 
 Image sources: type a full URL, or a filename relative to your `www` folder
 (served at `/local/`) - e.g. `porch.jpg` for `config/www/porch.jpg`.
+
+Select options: enter the choices separated by commas, e.g.
+`Low, Medium, High` - the first one becomes the initial value.
 
 ## Uninstalling
 
@@ -117,7 +126,7 @@ then delete the `custom_components/device_emulator` folder and restart.
 
 ## Versioning
 
-Releases are tagged `YYYY.MM.DD.#` (e.g. `2026.09.13.1`).
+Releases are tagged `YYYY.MM.DD.##` (e.g. `2026.09.19.01`).
 
 ## License
 

@@ -30,6 +30,7 @@ from .const import (
     Component,
     DEVICE_TRACKER_NOT_HOME_OPTION,
     DEVICE_TYPE_DEVICE_TRACKER,
+    DEVICE_TYPE_SELECT,
     DEVICE_TYPE_WEATHER,
     WEATHER_AUTO_OPTION,
     WEATHER_CONDITION_OPTIONS,
@@ -43,6 +44,7 @@ from .helpers import (
     set_state_override,
     set_weather_override,
 )
+from .mixins import FakeEntityMixin
 
 
 async def async_setup_entry(
@@ -55,6 +57,8 @@ async def async_setup_entry(
             entities.append(FakeWeatherConditionSelect(component))
         elif component.device_type == DEVICE_TYPE_DEVICE_TRACKER:
             entities.append(FakeZoneSelect(component))
+        elif component.device_type == DEVICE_TYPE_SELECT:
+            entities.append(FakeStandaloneSelect(component))
     async_add_entities(entities)
 
 
@@ -127,6 +131,41 @@ class FakeWeatherConditionSelect(SelectEntity, RestoreEntity):
         self._attr_current_option = option
         self.async_write_ha_state()
         self._apply()
+
+
+class FakeStandaloneSelect(FakeEntityMixin, SelectEntity, RestoreEntity):
+    """A simulated settable dropdown for the standalone Select device.
+
+    Unlike the other selects in this file (all hidden CONFIG-category
+    controls for a sibling entity on some other domain), this one IS the
+    primary, visible entity for its own device - so it gets
+    FakeEntityMixin like a "real" entity does, instead of being exempt
+    from the "Simulated status" override the way a hidden control is.
+    Its option list is whatever comma-separated string was entered in
+    the config flow's "options" step (see Component.option_list).
+    """
+
+    _attr_has_entity_name = True
+
+    def __init__(self, component: Component) -> None:
+        self._component = component
+        self._entry = component.entry
+        self._attr_name = component.label
+        self._attr_unique_id = f"{component.id}_select"
+        self._attr_device_info = device_info_for(component.entry)
+        self._attr_options = component.option_list
+        self._attr_current_option = self._attr_options[0]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._register_for_status_updates()
+        if (last_state := await self.async_get_last_state()) is not None:
+            if last_state.state in self._attr_options:
+                self._attr_current_option = last_state.state
+
+    async def async_select_option(self, option: str) -> None:
+        self._attr_current_option = option
+        self.async_write_ha_state()
 
 
 class FakeZoneSelect(SelectEntity, RestoreEntity):

@@ -2,6 +2,27 @@
 
 All notable changes to Device Emulator are documented here, newest first.
 
+## 5.3.0
+
+### Added
+- Six new standalone domains, matching the value-holding domains behind
+  Home Assistant's own "Helpers" (input_text/input_number/input_select/
+  input_datetime): **Text** (a settable string), **Number** (a settable
+  0-100 value), **Select** (a settable dropdown - you choose its
+  comma-separated options when adding it, via a new "Options" config
+  flow step), **Date**, **Time**, and **Date & Time** (each defaulting
+  to today/now). All six are simple settable values that hold whatever
+  you last set them to, restore across restarts, and respect the
+  device's "Simulated status" control like every other domain.
+- Considered but not added: `counter`, `timer`, and `schedule`. Unlike
+  every domain above, these are self-contained Home Assistant helper
+  integrations with no public Entity base class for a third-party
+  integration to subclass - there's no `counter.py`/`timer.py`/
+  `schedule.py` platform file this integration (or any custom
+  integration) could add to make Home Assistant treat them as
+  emulated devices, the way it does for every other domain in this
+  list.
+
 ## 5.2.3
 
 ### Fixed
